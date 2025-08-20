@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'graph.dart';
+import 'prediction_service.dart';
+import 'dart:async';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
@@ -152,6 +154,61 @@ class _BuzzerControlWidgetState extends State<BuzzerControlWidget> {
     );
   }
 }
+
+
+class AutoModeControlWidget extends StatefulWidget {
+  @override
+  _AutoModeControlWidgetState createState() => _AutoModeControlWidgetState();
+}
+
+class _AutoModeControlWidgetState extends State<AutoModeControlWidget> {
+  bool autoMode = false;
+  final DatabaseReference autoModeRef =
+      FirebaseDatabase.instance.ref("/solarDryer/control/automode");
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Sync with DB
+    autoModeRef.onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        setState(() {
+          autoMode = event.snapshot.value.toString() == "1";
+        });
+      }
+    });
+  }
+
+  void updateAutoMode(bool value) {
+    autoModeRef.set(value ? 1 : 0); // Write ON=1 / OFF=0 to Firebase
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          "Auto Mode",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        Switch(
+          value: autoMode,
+          onChanged: (value) {
+            setState(() {
+              autoMode = value;
+            });
+            updateAutoMode(value);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+
+
 
 class CollectorSelector extends StatefulWidget {
   @override
@@ -506,6 +563,19 @@ class _DryerMonitoringDashboardState extends State<DryerMonitoringDashboard> wit
     ),
   ),
 
+  SizedBox(height: 24),
+Text('AutoMode',
+    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+SizedBox(height: 16),
+Card(
+  elevation: 4,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: AutoModeControlWidget(),
+  ),
+),
+
 
   SizedBox(height: 24),
 Text('Buzzer Control',
@@ -521,7 +591,9 @@ Card(
 ),
 
          
-          DryingRecommendationCard(
+
+
+          DryingPredictionCard(
             temperature: temperature,
             humidity: humidity,
           ),
@@ -620,7 +692,7 @@ Card(
   Widget _buildStatusCard() {
     return Card(
       elevation: 4,
-      color: isOptimalCondition ? Colors.green[50] : Colors.amber[50],
+      color: isOptimalCondition ? const Color.fromARGB(255, 143, 209, 149) : const Color.fromARGB(255, 233, 214, 151),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: EdgeInsets.all(16),
@@ -872,411 +944,338 @@ Card(
   }
 }
 
-class DryingRecommendationCard extends StatefulWidget {
-   final String temperature;
+
+class DryingPredictionCard extends StatefulWidget {
+  final String temperature;
   final String humidity;
 
-  
-
-  const DryingRecommendationCard({
+  const DryingPredictionCard({
     Key? key,
     required this.temperature,
     required this.humidity,
   }) : super(key: key);
+
   @override
-  _DryingRecommendationCardState createState() => _DryingRecommendationCardState();
+  _DryingPredictionCardState createState() => _DryingPredictionCardState();
 }
 
-class _DryingRecommendationCardState extends State<DryingRecommendationCard> {
-
+class _DryingPredictionCardState extends State<DryingPredictionCard> {
   final Map<String, List<String>> categoryItems = {
-    'Fruits': ['Watermelon', 'Mango', 'Apple', 'Banana', 'Grapes', 'Pineapple', 'Strawberry'],
-    'Vegetables': ['Carrot', 'Spinach', 'Tomato', 'Bell Pepper', 'Onion', 'Potato', 'Zucchini'],
-     'Nuts': [
-    'Almonds',
-    'Cashews',
-    'Walnuts',
-    'Pistachios',
-    'Hazelnuts',
-    'Pecans',
-    'Brazil Nuts',
-    'Macadamia Nuts',
-    'Chestnuts'
-  ]
+    'Fruit': ['Mango', 'Apple', 'Banana', 'Grapes', 'Pineapple', 'Strawberry', 'Watermelon'],
+    'Vegetable': ['Carrot', 'Spinach', 'Tomato', 'Bell Pepper', 'Onion', 'Potato', 'Zucchini'],
+    'Nut': ['Almonds', 'Cashews', 'Walnuts', 'Pistachios', 'Hazelnuts', 'Pecans', 'Brazil Nuts'],
   };
 
-  final Map<String, Map<String, Map<String, Map<String, String>>>> fruitVegData = {
-    'Fruits': {
-      'Watermelon': {
-         '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '48'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '36'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '30'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '24'},
-      },
-      'Mango': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '36'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '30'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '24'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '18'},
-      },
-      'Apple': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '20'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '16'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-      'Banana': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '30'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '24'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '20'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '16'},
-      },
-      'Grapes': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '48'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '40'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '32'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '24'},
-      },
-      'Pineapple': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '40'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '32'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '26'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '20'},
-      },
-      'Strawberry': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '18'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '15'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-    },
-    'Vegetables': {
-      'Carrot': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '20'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '16'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '14'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '10'},
-      },
-      'Spinach': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '8'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '6'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '5'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '4'},
-      },
-      'Tomato': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '32'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '26'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '22'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '18'},
-      },
-      'Bell Pepper': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '20'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '16'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-      'Onion': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '20'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '16'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '12'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '10'},
-      },
-      'Potato': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '30'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '24'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '20'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '16'},
-      },
-      'Zucchini': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '20'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '16'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-    },
-
-    'Nuts': {
-      'Almonds': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '20'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '16'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-      'Cashews': {
-        '35_45': {'temperature': '35', 'humidity': '45', 'dryingTime': '24'},
-        '40_40': {'temperature': '40', 'humidity': '40', 'dryingTime': '20'},
-        '45_35': {'temperature': '45', 'humidity': '35', 'dryingTime': '16'},
-        '50_30': {'temperature': '50', 'humidity': '30', 'dryingTime': '12'},
-      },
-      // Add more nuts data here
-    },
-  };
-  late String currentTemp;
-  late String currentHumidity;
-
-
-  String selectedCategory = 'Fruits';
-  String selectedItem = 'Watermelon';
-  
+  late TextEditingController _temperatureController;
+  String selectedCategory = 'Fruit';
+  String selectedItem = 'Mango';
   String predictedTime = '';
+  String predictedDays = '';
+  String predictedDetailed='';
+  bool isLoading = false;
+  String errorMessage = '';
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
-     currentTemp = widget.temperature;
-    currentHumidity = widget.humidity;
-    calculatePrediction();
-  }
-
-   @override
-  void didUpdateWidget(covariant DryingRecommendationCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.temperature != widget.temperature || oldWidget.humidity != widget.humidity) {
-      currentTemp = widget.temperature;
-      currentHumidity = widget.humidity;
-      calculatePrediction();
-    }
-  }
-
-  void calculatePrediction() {
-    List<String> tempKeys = ['35_45', '40_40', '45_35', '50_30'];
-    Map<String, int> timeByKey = {};
-
-    for (var key in tempKeys) {
-      var dataPoint = fruitVegData[selectedCategory]?[selectedItem]?[key];
-      if (dataPoint != null && dataPoint['dryingTime'] != null) {
-        timeByKey[key] = int.parse(dataPoint['dryingTime']!);
-      }
-    }
-
-    String lookupKey = '';
-    int temp = int.tryParse(currentTemp) ?? 40;
-    int humidity = int.tryParse(currentHumidity) ?? 40;
-
-    if (temp <= 37) lookupKey = '35_45';
-    else if (temp <= 42) lookupKey = '40_40';
-    else if (temp <= 47) lookupKey = '45_35';
-    else lookupKey = '50_30';
-
-    var dryingData = fruitVegData[selectedCategory]?[selectedItem]?[lookupKey];
-    var dryingTime = dryingData?['dryingTime'];
-
-    setState(() {
-      predictedTime = dryingTime != null ? '$dryingTime hours' : 'Data not available';
+    _temperatureController = TextEditingController(text: widget.temperature);
+    // Trigger initial prediction after a short delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _debouncedPrediction();
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    // paste the UI part from your original _buildRecommendation() here
-    // remove any internal variable declarations and just use `selectedCategory`, etc.
-    // If you'd like, I can fill that in too.
-   /* Your UI Code (the entire Card and dropdowns etc.) */
+  void didUpdateWidget(DryingPredictionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.temperature != widget.temperature) {
+      _temperatureController.text = widget.temperature;
+      _debouncedPrediction();
+    }
+  }
 
+  void _onTemperatureChanged(String value) {
+    // Cancel previous timer if it exists
+    if (_debounceTimer != null) {
+      _debounceTimer!.cancel();
+    }
     
-      return Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+    // Set a new timer to debounce the API calls
+    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+      _debouncedPrediction();
+    });
+  }
+
+  void _onSelectionChanged() {
+    // Cancel any ongoing debounce
+    if (_debounceTimer != null) {
+      _debounceTimer!.cancel();
+    }
+    _debouncedPrediction();
+  }
+
+  void _debouncedPrediction() {
+    final String temp = _temperatureController.text.trim();
+    
+    // Only predict if temperature is valid and not empty
+    if (temp.isEmpty || double.tryParse(temp) == null) {
+      setState(() {
+        predictedTime = '';
+        predictedDays = '';
+        errorMessage = temp.isEmpty ? '' : 'Invalid temperature';
+      });
+      return;
+    }
+
+    calculatePrediction();
+  }
+
+  Future<void> calculatePrediction() async {
+    final String temp = _temperatureController.text.trim();
+    
+    if (temp.isEmpty) {
+      setState(() {
+        predictedTime = '';
+        predictedDays = '';
+        errorMessage = '';
+      });
+      return;
+    }
+
+    final double? temperature = double.tryParse(temp);
+    if (temperature == null) {
+      setState(() {
+        predictedTime = '';
+        predictedDays = '';
+        predictedDetailed = '';
+        errorMessage = 'Please enter a valid number';
+      });
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+    });
+
+    try {
+      final result = await PredictionService.predictDryingTime(
+        produceType: selectedCategory,
+        name: selectedItem,
+        dryingTemperatureC: temperature,
+      );
+
+      final double minutes = result['predicted_drying_time_min'];
+      final int hours = (minutes / 60).floor();
+        final int remainingMinutes = (minutes % 60).round();
+      final double days = minutes / (24 * 60);
+
+      setState(() {
+        predictedTime = '${hours}h ${remainingMinutes}m';
+        predictedDays = '${days.toStringAsFixed(2)} days';
+         predictedDetailed = '${hours} hours ${remainingMinutes} minutes';
+        isLoading = false;
+      });
+      
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Prediction failed: ${e.toString().replaceAll('Exception: ', '')}';
+        predictedTime = '';
+        predictedDays = '';
+        isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _temperatureController.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      margin: EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Drying Time Prediction',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.green[800],
+              ),
+            ),
+            SizedBox(height: 16),
+            
+            // Temperature Input
+            TextFormField(
+              controller: _temperatureController,
+              decoration: InputDecoration(
+                labelText: 'Temperature (°C)',
+                border: OutlineInputBorder(),
+                suffixText: '°C',
+                suffixIcon: isLoading ? Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ) : null,
+              ),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              onChanged: _onTemperatureChanged,
+            ),
+            SizedBox(height: 16),
+            
+            Text(
+              'Current Humidity: ${widget.humidity}%',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            SizedBox(height: 16),
+            
+            // Category Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedCategory,
+              decoration: InputDecoration(
+                labelText: 'Produce Category',
+                border: OutlineInputBorder(),
+              ),
+              items: categoryItems.keys.map((String category) {
+                return DropdownMenuItem<String>(
+                  value: category,
+                  child: Text(category),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedCategory = newValue!;
+                  selectedItem = categoryItems[newValue]!.first;
+                });
+                _onSelectionChanged();
+              },
+            ),
+            SizedBox(height: 16),
+            
+            // Item Dropdown
+            DropdownButtonFormField<String>(
+              value: selectedItem,
+              decoration: InputDecoration(
+                labelText: 'Produce Item',
+                border: OutlineInputBorder(),
+              ),
+              items: categoryItems[selectedCategory]!.map((String item) {
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(item),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedItem = newValue!;
+                });
+                _onSelectionChanged();
+              },
+            ),
+            SizedBox(height: 16),
+            
+            // Prediction Result - Always visible when available
+            if (predictedTime.isNotEmpty && predictedDays.isNotEmpty)
+  Container(
+    padding: EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.green[50],
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.green),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.timer, color: Colors.green[800], size: 24),
+        SizedBox(width: 12),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Drying Time Prediction',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                'Predicted Drying Time',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[800],
+                ),
               ),
-              SizedBox(height: 16),
-              
-              // Category Dropdown
-            Row(
+              SizedBox(height: 6),
+              Row(
                 children: [
-                  Icon(Icons.category, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Category:', style: TextStyle(fontWeight: FontWeight.w500)),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedCategory,
-                          isExpanded: true,
-                          items: categoryItems.keys.map((String category) {
-                            return DropdownMenuItem<String>(
-                                value: category,
-                              child: Text(category),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            if (newValue != null) {
-                              setState(() {
-                                selectedCategory = newValue;
-                                // When category changes, update the item to the first one in the new category
-                                selectedItem = categoryItems[newValue]!.first;
-                                calculatePrediction();
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    ),
+                  Icon(Icons.access_time, size: 16, color: Colors.green[700]),
+                  SizedBox(width: 4),
+                  Text(
+                    predictedTime,
+                    style: TextStyle(fontSize: 14, color: Colors.green[700]),
                   ),
                 ],
               ),
-              SizedBox(height: 12),
-              
-              // Item Dropdown
+              SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(Icons.eco, color: Colors.green),
-                  SizedBox(width: 8),
-                  Text('Item:', style: TextStyle(fontWeight: FontWeight.w500)),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: selectedItem,
-                          isExpanded: true,
-                          items: categoryItems[selectedCategory]!.map((String item) {
-                            return DropdownMenuItem<String>(
-                              value: item,
-                              child: Text(item),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            if (newValue != null) {
-                              setState(() {
-                                selectedItem = newValue;
-                                
-                                calculatePrediction();
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                    ),
+                  Icon(Icons.calendar_today, size: 16, color: Colors.green[700]),
+                  SizedBox(width: 4),
+                  Text(
+                    predictedDays,
+                    style: TextStyle(fontSize: 14, color: Colors.green[700]),
                   ),
                 ],
-              ),
-              SizedBox(height: 20),
-              
-              // Temperature and Humidity Sliders
-              Text(
-                'Current Conditions:',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              SizedBox(height: 8),
-              
-              // Temperature Slider
-              Row(
-                children: [
-                  Icon(Icons.thermostat, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text('Temperature: $currentTemp°C', style: TextStyle(fontWeight: FontWeight.w500)),
-                ],
-              ),
-              Slider(
-                value: double.parse(currentTemp),
-                min: 30,
-                max: 50,
-                divisions: 15,
-                activeColor: Colors.orange,
-                label: currentTemp,
-                onChanged: (double value) {
-                  setState(() {
-                    currentTemp = value.round().toString();
-                    calculatePrediction();
-                  });
-                },
-              ),
-              SizedBox(height: 8),
-              
-              // Humidity Slider
-              Row(
-                children: [
-                  Icon(Icons.water_drop, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Text('Humidity: $currentHumidity%', style: TextStyle(fontWeight: FontWeight.w500)),
-                ],
-              ),
-              Slider(
-                value: double.parse(currentHumidity),
-                min: 30,
-                max: 70,
-                divisions: 15,
-                activeColor: Colors.blue,
-                label: currentHumidity,
-                onChanged: (double value) {
-                  setState(() {
-                    currentHumidity = value.round().toString();
-                    calculatePrediction();
-                  });
-                },
-              ),
-              SizedBox(height: 24),
-              
-              // Results Section
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade200),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'Estimated Drying Time',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Colors.green.shade800,
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.timer, size: 32, color: Colors.green),
-                        SizedBox(width: 8),
-                        Text(
-                          predictedTime,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'For $selectedItem at $currentTemp°C and $currentHumidity% humidity',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        color: Colors.green.shade700,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
         ),
-      );
+      ],
+    ),
+  )
+            else if (isLoading)
+              Container(
+                padding: EdgeInsets.all(12),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.green)),
+                    SizedBox(width: 12),
+                    Text('Calculating...', style: TextStyle(color: Colors.green)),
+                  ],
+                ),
+              )
+            else if (errorMessage.isNotEmpty)
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red),
+                ),
+                child: Text(
+                  errorMessage,
+                  style: TextStyle(color: Colors.red[800], fontSize: 14),
+                ),
+              )
+            else
+              SizedBox.shrink(),
 
+            // Help text
+            SizedBox(height: 8),
+            Text(
+              'Prediction updates automatically when you change temperature or selection',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
+
